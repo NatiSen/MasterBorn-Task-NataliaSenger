@@ -75,7 +75,9 @@ const getDefaultSelections = (
   const selections: Record<string, string | number | boolean> = {};
 
   for (const option of product.options) {
-    if (option.defaultValue !== undefined) {
+     if (option.type === 'select' || option.type === 'color') {
+      selections[option.id] = "";
+        } else if (option.defaultValue !== undefined) {
       selections[option.id] = option.defaultValue;
     } else if (option.choices && option.choices.length > 0) {
       const firstAvailable = option.choices.find((c) => c.available);
@@ -425,6 +427,8 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
       setShowShareModal(false);
     }
 
+    // CFG-152 Focus managmenent after closing modal
+
     if (lastFocusedElement.current) {
       lastFocusedElement.current.focus();
     }
@@ -440,10 +444,15 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
   );
 
   const handleDiscardChanges = useCallback(() => {
+    if (window.confirm("Are you sure you want to discard your changes?")) {
     setSelections(getDefaultSelections(product));
     setSelectedAddOns([]);
     setQuantity(1);
     setIsDirty(false);
+    if (window.history.replaceState) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }
   }, [product]);
 
   // -------------------------------------------------------------------------
@@ -500,14 +509,37 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           {option.choices?.map((choice, index) => (
             <div
               key={index}
+              id={`color-swatch-${index}`} 
               className={`color-swatch ${currentValue === choice.value ? "selected" : ""}`}
               style={{ backgroundColor: choice.colorHex }}
               onClick={() =>
                 !readOnly && handleOptionChange(option.id, choice.value)
               }
-              title={choice.label}
+              tabIndex={currentValue === choice.value ? 0 : -1} 
               role="radio"
               aria-checked={currentValue === choice.value}
+              title={choice.label}
+              onKeyDown={(e) => {
+                if (readOnly) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleOptionChange(option.id, choice.value);
+                }
+                let nextIndex = -1;
+                if (e.key === "ArrowRight") {
+                  nextIndex = (index + 1) % (option.choices?.length || 1);
+                } else if (e.key === "ArrowLeft") {
+                  nextIndex = (index - 1 + (option.choices?.length || 1)) % (option.choices?.length || 1);
+                }
+                if (nextIndex !== -1) {
+                  const nextChoice = option.choices![nextIndex];
+                  handleOptionChange(option.id, nextChoice.value);
+                setTimeout(() => {
+                    const el = document.getElementById(`color-swatch-${nextIndex}`);
+                    el?.focus();
+                  }, 0);
+                }
+              }}
             />
           ))}
         </div>
@@ -627,7 +659,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           type="checkbox"
           className="addon-checkbox"
           checked={isSelected}
-          onChange={() => { }}
+          readOnly
           disabled={readOnly || !isAvailable}
         />
         <div className="addon-info">
@@ -635,7 +667,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           <div className="addon-description">
             {addOn.description}
             {!isAvailable && addOn.dependsOn && (
-              <span style={{ color: "#e74c3c" }}>
+              <span className="error-text" style={{ color: "#e74c3c" }}>
                 {" "}
                 (Requires {addOn.dependsOn.optionId})
               </span>
@@ -944,6 +976,13 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
             className="btn btn-success btn-block"
             onClick={handleAddToCart}
             disabled={readOnly || !validation?.valid || isPriceLoading}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === '') {
+                e.preventDefault();
+                handleAddToCart();
+              }
+            }}
+            tabIndex={0}
           >
             {isPriceLoading ? "Calculating..." : "Add to Cart"}
           </button>

@@ -4,7 +4,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Configuration, Product, PriceBreakdown, PriceResponse } from '../components/ProductConfigurator/types';
 import { calculatePrice } from '../services/api';
-
+/**
+ * Interface for the hook's return value to ensure type safety
+ * across the component tree.
+ */
 interface UsePriceCalculationResult {
   price: PriceBreakdown | null;
   formattedTotal: string;
@@ -14,143 +17,99 @@ interface UsePriceCalculationResult {
 }
 
 /**
- * Custom hook for managing price calculation
+ * Hook for handling real-time price calculations with race-condition protection.
+ * Optimized for the TechStyle demo to ensure UI Stability
  */
 export function usePriceCalculation(
   config: Configuration | null,
   product: Product
 ): UsePriceCalculationResult {
   const [price, setPrice] = useState<PriceBreakdown | null>(null);
-  const [formattedTotal, setFormattedTotal] = useState<string>('$0.00');
+  const [formattedTotal, setFormattedTotal] = useState<string>('$0.00 ${product.currency}');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Track the latest request timestamp
-  const latestRequestRef = useRef<number>(0);
+    // Use a ref for the product object to avoid unnecessary fetchPrice re-creations
+   // when the parent component re-renders with a new product object reference.
 
-  const fetchPrice = useCallback(async () => {
+   const productRef = useRef(product);
+   useEffect(() => {
+    productRef.current = product;
+   },[product]);
+
+
+   /**
+    * Core function to fetch pricing from the API.
+    * Includes AbortSignal handling to fix RACE CONDITIONS (CFG-142).
+    */
+
+   const fetchPrice = useCallback(async (signal?:AbortSignal) => {
     if (!config) {
       setPrice(null);
-      setFormattedTotal('$0.00');
       return;
     }
-
     setIsLoading(true);
-    setError(null);
-
-    const requestTime = Date.now();
-    latestRequestRef.current = requestTime;
+    setError(null); // CFG-151: Reset error state before a new attempt
 
     try {
-      const response: PriceResponse = await calculatePrice(config, product);
+      const response: PriceResponse = await calculatePrice(config, productRef.current, { signal });
 
-      if (response.timestamp >= latestRequestRef.current) {
+
+      if (!signal?.aborted) {
         setPrice(response.breakdown);
         setFormattedTotal(response.formattedTotal);
       }
 
-    } catch {
-      // Only set error if this is still the latest request
-      if (requestTime === latestRequestRef.current) {
-        setError('ERR_PRICE_CALC_FAILED');
-        setPrice(null);
+    } catch (err: unknown) {
+
+      if (err instanceof Error && err.name === 'AbortError') {
+        return; 
       }
+
+     // CFG-151: User-friendly error message for the UI
+     setError('We encountered a problem updating the price. Please check your connection and try again.');
+     setPrice(null);
     } finally {
-      setIsLoading(false);
-    }
-  }, [config, product]);
-
-  // Fetch price when config changes
-  useEffect(() => {
-    fetchPrice();
-  }, [config?.selections, config?.addOns, config?.quantity]);
-
-  return {
-    price,
-    formattedTotal,
-    isLoading,
-    error,
-    refetch: fetchPrice,
-  };
-}
-
-/**
- * Debounced version of price calculation
- */
-export function useDebouncedPriceCalculation(
-  config: Configuration | null,
-  product: Product,
-  delay: number = 300
-): UsePriceCalculationResult {
-  const [price, setPrice] = useState<PriceBreakdown | null>(null);
-  const [formattedTotal, setFormattedTotal] = useState<string>('$0.00');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const configRef = useRef(config);
-
-  useEffect(() => {
-    // Clear any pending timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    if (!config) {
-      setPrice(null);
-      setFormattedTotal('$0.00');
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-
-    timeoutRef.current = setTimeout(async () => {
-      try {
-        const response = await calculatePrice(configRef.current!, product);
-        setPrice(response.breakdown);
-        setFormattedTotal(response.formattedTotal);
-        setError(null);
-      } catch {
-        setError('ERR_PRICE_CALC_FAILED');
-      } finally {
+      if (!signal?.aborted) {
         setIsLoading(false);
       }
-    }, delay);
+    }
+   },[config]);
 
-    configRef.current = config;
+   /**
+   * Effect to trigger price calculation on configuration changes.
+   * Implements debouncing to prevent API throttling and UI flickering.
+   */
+
+   useEffect(() => {
+    const controller = new AbortController();
+
+   // CFG-142: 150ms debounce ensures smooth experience during rapid user selections
+
+    const timeoutId = setTimeout(() =>{
+      fetchPrice(controller.signal);
+    }, 150);
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      clearTimeout(timeoutId); 
+      controller.abort();    // Crucial: Fixes Race Conditions by cancelling stale requests  
     };
-  }, [config, product, delay]);
 
-  const refetch = useCallback(() => {
-    if (config) {
-      setIsLoading(true);
-      calculatePrice(config, product)
-        .then(response => {
-          setPrice(response.breakdown);
-          setFormattedTotal(response.formattedTotal);
-          setError(null);
-        })
-        .catch(() => {
-          setError('ERR_PRICE_CALC_FAILED');
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
-  }, [config, product]);
+    // Deep-watch relevant config changes to trigger recalculation
+
+   }, [
+    JSON.stringify(config?.selections),
+    JSON.stringify(config?.addOns),
+    config?.quantity,
+    fetchPrice
+   ]);
 
   return {
     price,
     formattedTotal,
     isLoading,
     error,
-    refetch,
+    refetch: () => fetchPrice(),
   };
 }
+
