@@ -292,29 +292,33 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
 
   const handleOptionChange = useCallback(
     (optionId: string, value: string | number | boolean) => {
-      setSelections((prev) => ({
-        ...prev,
-        [optionId]: value,
-      }));
+      setSelections((prev) => {
+        const option = product.options.find((o) => o.id === optionId);
+        const choice = option?.choices?.find((c) => String(c.value) === String(value));
+        const finalValue = choice ? choice.value : value;
 
-      const option = product.options.find((o) => o.id === optionId);
-      if (option) {
-        const dependentAddOns = product.addOns.filter(
-          (a) => a.dependsOn?.optionId === optionId,
+        const newSelections = { ...prev, [optionId]: finalValue };
+
+        // CFG-148: CRITICAL FIX - Prevent crash by auto-deselecting invalid add-ons
+
+        setSelectedAddOns((prevAddOns) =>
+          prevAddOns.filter((addOnId) => {
+            const addOn = product.addOns.find((a) => a.id === addOnId);
+            if (!addOn || !addOn.dependsOn) return true;
+
+            return isAddOnAvailable(addOn, newSelections);
+          })
         );
+        return newSelections;
 
-        for (const addOn of dependentAddOns) {
-          if (addOn.dependsOn && value !== addOn.dependsOn.requiredValue) {
-            const index = selectedAddOns.indexOf(addOn.id);
-            if (index > -1) {
-              selectedAddOns.splice(index, 1);
-              setSelectedAddOns(selectedAddOns);
-            }
-          }
-        }
-      }
+      });
+
+      setIsDirty(true);
+
     },
-    [product.options, product.addOns, selectedAddOns],
+
+    [product.options, product.addOns],
+
   );
 
   const handleAddOnToggle = useCallback(
@@ -623,7 +627,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           type="checkbox"
           className="addon-checkbox"
           checked={isSelected}
-          onChange={() => {}}
+          onChange={() => { }}
           disabled={readOnly || !isAvailable}
         />
         <div className="addon-info">
