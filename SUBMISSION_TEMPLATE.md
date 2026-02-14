@@ -65,6 +65,8 @@ While this was a technically simple fix (adjusting a conditional operator from >
 
 Justification:
 In a B2B Enterprise context, pricing precision is non-negotiable. An "off-by-one" error at a major threshold (like 50 units) isn't just a bug; it's a potential blocker for high-volume sales. I prioritized this to ensure that during the TechStyle demo, the financial breakdown is 100% accurate, thereby protecting revenue integrity and customer trust.]
+
+
 ---
 
 ## Technical Write-Up
@@ -141,64 +143,50 @@ List any issues you noticed but intentionally left:
 | CFG-155 | [Nice-to-have. Dark mode is a visual overhaul. Priority was given to stability and legal compliance (WCAG).] |
 | CFG-146 | Low impact. Cosmetic timezone issue that does not prevent users from completing the configuration. |
 
-### Potential Improvements for the Future
+# Submission: ProductConfigurator Refactor
 
-If you had more time, what would you improve?
+##  Potential Improvements for the Future
 
-1. [Refactored Option Selection UI (Select Box Implementation)]
-Change: Replaced the legacy choice-rendering logic with a standardized, controlled <select> component that features an explicit "Empty State" placeholder (-- Select {option.name} --).
-
----
-
-## Questions for the Team
-
-Questions you would ask in a real scenario:
-
-1. [Question 1: Product/Sales (Sarah & Jamie): Regarding CFG-154, can we officially confirm the discount threshold policy? Currently, I’ve set it to be inclusive (>= 50), but there was a discrepancy in the notes. For a high-volume client like TechStyle, we need a single source of truth for the pricing engine to avoid legal disputes.]
-2. [Question 2: Product (Sarah): What is the long-term vision for the 'Quick Add' feature? I’ve temporarily hidden it to clean up the UI per current requests, but since key accounts are asking for it, should we consider moving it to a 'Power User' settings toggle instead of removing it entirely?]
+* **Architectural Decomposition:** If I had more time, I would break down the current monolithic component into smaller, specialized units (e.g., `PriceEngine`, `OptionPicker`, `PreviewPanel`). This would improve testability and long-term maintainability.
+* **Refactored Option Selection UI:** I would replace the legacy choice-rendering logic with a standardized, controlled `<select>` component that features an explicit "Empty State" placeholder (*-- Select {option.name} --*) to improve the user journey and data validation.
 
 ---
 
-## Assumptions Made
+##  Questions for the Team
 
-List any assumptions you made to proceed:
-
-1. [Assumption 1: Discount Inclusivity (CFG-154): In the absence of a clear confirmation regarding the "50 vs 51" threshold, I assumed the business intent for a "50+ items" discount is inclusive (quantity >= 50). This aligns with standard B2B wholesale pricing patterns and ensures the most favorable offer for the TechStyle demo.]
-2. [Assumption 2: TechStyle Demo Priority: I assumed that legal compliance (WCAG 2.1) and financial accuracy are the primary success metrics for the upcoming demo. Consequently, I prioritized accessibility fixes and price race-condition stability over purely aesthetic features like Dark Mode.]
-3. [Assumption 3: Quick Add Logic Preservation: I assumed that the "Quick Add" feature is currently in a state of strategic limbo. Instead of permanent code deletion (which would be irreversible if the client demands the feature), I assumed a "soft removal" (hiding the UI) is the safest middle ground to satisfy Product requirements while maintaining business agility.]
-4. [Assumption 4: Currency & Rounding: I assumed that all price calculations should be handled in the product's base currency and that the existing formatPrice utility handles international rounding standards correctly, as I did not modify the core currency formatting logic.]
-5. [Assumption 5: Technical Environment: I assumed that the memory sluggishness (CFG-143) reported by QA was primarily due to the unoptimized window listeners I found and fixed, rather than a deeper architectural issue with the image preview service.]
-
+1.  **Product/Sales (Sarah & Jamie):** Regarding **CFG-154**, can we officially confirm the discount threshold policy? Currently, I’ve set it to be inclusive (>= 50), but there was a discrepancy in the notes. For a high-volume client like TechStyle, we need a single source of truth for the pricing engine to avoid legal disputes.
+2.  **Product (Sarah):** What is the long-term vision for the **"Quick Add"** feature? I’ve temporarily hidden it to clean up the UI per current requests, but since key accounts are asking for it, should we consider moving it to a "Power User" settings toggle instead of removing it entirely?
 
 ---
 
-## Self-Assessment
+##  Assumptions Made
+
+1.  **Discount Inclusivity (CFG-154):** In the absence of a clear confirmation regarding the "50 vs 51" threshold, I assumed the business intent for a "50+ items" discount is inclusive (**quantity >= 50**). This aligns with standard B2B wholesale pricing and ensures the most favorable offer for the TechStyle demo.
+2.  **TechStyle Demo Priority:** I assumed that **legal compliance (WCAG 2.1)** and **financial accuracy** are the primary success metrics. Consequently, I prioritized accessibility fixes and price race-condition stability over aesthetic features like Dark Mode.
+3.  **Quick Add Logic Preservation:** I treated the "Quick Add" feature as being in "strategic limbo." Instead of permanent code deletion, I implemented a **"soft removal" (hiding the UI)** to satisfy current Product requirements while maintaining business agility should TechStyle demand it.
+4.  **Currency & Rounding:** I assumed that the existing `formatPrice` utility handles international rounding standards correctly, so I focused on the logic layer rather than modifying core currency formatting.
+5.  **Technical Environment:** I assumed that the memory sluggishness (**CFG-143**) was primarily due to the unoptimized window listeners I identified, rather than a deeper architectural issue with the image preview service.
+
+---
+
+##  Self-Assessment
 
 ### What went well?
-Demo-Ready Transformation: I believe that is now significantly more robust for the TechStyle presentation. By fixing critical crashes (CFG-148) and price race conditions (CFG-142), I eliminated the risks that could have derailed a live demo.
-
-Business Alignment: I successfully balanced technical stability with business logic. The refactor of the selection UI ensures that the sales team can present a clean, professional, and financially accurate product that builds customer trust.
-[Your reflection]
+* **Demo-Ready Transformation:** The application is now significantly more robust. By fixing critical crashes (**CFG-148**) and price race conditions (**CFG-142**), I eliminated the primary risks that could have derailed a live demo.
+* **Business Alignment:** I successfully balanced technical stability with business logic. The refactor of the selection UI ensures the sales team can present a clean, professional, and financially accurate product.
 
 ### What was challenging?
-Time Boxing & Scope: The biggest challenge was limiting the scope of my work. The task was so engaging that I had to consciously stop myself from refactoring the entire codebase. I chose to focus strictly on what was necessary for a stable, demo-ready product within the 4-hour limit.
-
-Conflict Resolution: Deciding how to handle the "Quick Add" feature amidst contradictory stakeholder requests required a careful balance between technical cleanup and preserving potential business value.
-
-Legacy Debugging: Tracing the memory leaks and race conditions in the original implementation required a deep dive into unmanaged side effects, which is always more time-consuming than building from scratch.
-[Your reflection]
+* **Time Boxing & Scope:** The biggest challenge was limiting the scope. I had to consciously stop myself from refactoring the entire codebase to focus strictly on what was necessary for a stable product within the 4-hour limit.
+* **Conflict Resolution:** Deciding how to handle the "Quick Add" feature amidst contradictory stakeholder requests required a careful balance between technical cleanup and preserving potential business value.
+* **Legacy Debugging:** Tracing memory leaks and race conditions in the original implementation was more time-consuming than building from scratch.
 
 ### What would you do differently with more time?
-Architectural Decomposition: I would break down the monolithic component into smaller, specialized units (e.g., PriceEngine, OptionPicker, PreviewPanel). This guarantees a better workflow
-[Your reflection]
+* **Architectural Decomposition:** As mentioned, I would separate the state management logic from the UI components to guarantee a better workflow and easier scaling.
 
 ---
 
-## Additional Notes
+##  Additional Notes
 
-Anything else you want us to know:
 I truly enjoyed working on this challenge! Refactoring the configurator and solving these complex state-dependency issues was a great experience. It was a pleasure to take a "rough" backlog and transform it into a stable, demo-ready product for TechStyle.
 
-I am very interested in your feedback and look forward to hearing your thoughts on my approach. I am also eager to discuss my technical decisions about the "Quick Add" strategy with the team during the next stage.
-
-[Your notes]
+I am very interested in your feedback and look forward to hearing your thoughts on my approach. I am also eager to discuss my technical decisions regarding the "Quick Add" strategy with the team during the next stage.
