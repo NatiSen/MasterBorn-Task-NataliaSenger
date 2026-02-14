@@ -75,9 +75,9 @@ const getDefaultSelections = (
   const selections: Record<string, string | number | boolean> = {};
 
   for (const option of product.options) {
-     if (option.type === 'select' || option.type === 'color') {
+    if (option.type === 'select' || option.type === 'color') {
       selections[option.id] = "";
-        } else if (option.defaultValue !== undefined) {
+    } else if (option.defaultValue !== undefined) {
       selections[option.id] = option.defaultValue;
     } else if (option.choices && option.choices.length > 0) {
       const firstAvailable = option.choices.find((c) => c.available);
@@ -197,48 +197,48 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
   // -------------------------------------------------------------------------
 
   useEffect(() => {
+    
     const handleResize = () => {
-      if (colorPickerRef.current) {
-        const width = colorPickerRef.current.offsetWidth;
-        const cols = calculateColorColumns(width);
-        colorPickerRef.current.style.setProperty(
-          "--color-columns",
-          cols.toString(),
-        );
-      }
-    };
+    if (colorPickerRef.current) {
+      const width = colorPickerRef.current.offsetWidth;
+      const cols = calculateColorColumns(width);
+      colorPickerRef.current.style.setProperty("--color-columns", cols.toString());
+    }
+  };
 
     window.addEventListener("resize", handleResize);
     handleResize();
-  }, []);
+
+    // CFG-143 & CFG-150 Cleanup resize listener to prevent memory leak
+
+    return () => window.removeEventListener("resize", handleResize);
+}, []);
 
   useEffect(() => {
-    let cancelled = false;
+    let isCancelled = false;
 
     const validate = async () => {
       try {
         const result = await validateConfiguration(currentConfig, product);
-        if (!cancelled) {
+        if (!isCancelled) {
           setValidation(result);
         }
-      } catch {
+      } catch (err) {
+      console.error(err);
       }
     };
 
     validate();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentConfig, product]);
+    return () => { isCancelled = true; };
+}, [currentConfig, product]);
 
   useEffect(() => {
-    let cancelled = false;
+    let isCancelled = false;
 
     const updatePreview = async () => {
       try {
         const preview = await generatePreview(currentConfig, product);
-        if (!cancelled) {
+        if (!isCancelled) {
           setPreviewUrl(preview.imageUrl);
         }
       } catch {
@@ -248,9 +248,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
 
     updatePreview();
 
-    return () => {
-      cancelled = true;
-    };
+   return () => { isCancelled = true; };
   }, [currentConfig, product]);
 
   useEffect(() => {
@@ -268,6 +266,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
 
   useEffect(() => {
     if (showShareModal) {
+      // CFG-147: Ensure configuration is encoded correctly for URL
       const encoded = encodeConfigurationToUrl(currentConfig);
       const url = `${window.location.origin}${window.location.pathname}?config=${encoded}`;
       setShareUrl(url);
@@ -279,6 +278,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
     const encodedConfig = params.get("config");
 
     if (encodedConfig) {
+      // Decoded using decodeURIComponent automatically via URLSearchParams
       const decoded = decodeConfigurationFromUrl(encodedConfig);
       if (decoded) {
         if (decoded.selections) setSelections(decoded.selections);
@@ -380,7 +380,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
         setIsDirty(false);
       }
     } catch {
-      setError(ERROR_CODES.UNKNOWN);
+      setError("Failed to load draft. Please try again.");
     }
   }, []);
 
@@ -389,13 +389,13 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
       await deleteDraft(draftId);
       setDrafts((prev) => prev.filter((d) => d.id !== draftId));
     } catch {
-      setError(ERROR_CODES.UNKNOWN);
+      setError("Failed to delete draft. Please try again.");
     }
   }, []);
 
   const handleAddToCart = useCallback(() => {
     if (!validation?.valid) {
-      setError(validation?.errors[0]?.code || ERROR_CODES.UNKNOWN);
+      setError("Please check your configuration before adding to cart.");
       return;
     }
 
@@ -404,19 +404,55 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
     }
   }, [validation, price, currentConfig, onAddToCart]);
 
-  const handleQuickAdd = useCallback(() => {
+  // CFG-144: Removed handleQuickAdd feature per Product request, left for further discussion
+
+  /* const handleQuickAdd = useCallback(() => {
     if (price && onAddToCart) {
       onAddToCart(currentConfig, price);
     }
-  }, [price, currentConfig, onAddToCart]);
+  }, [price, currentConfig, onAddToCart]); */
+
+  // CFG-145: Improvement not implemented yet, left for further discussion
+
+  /*const handleQuickAdd = useCallback(() => {
+  // Prevent adding to cart if configuration is invalid
+  if (!validation?.valid) {
+  setError("Please complete all required options.");
+  return;
+  }
+  
+  if (price && onAddToCart) {
+  // Add current configuration to cart
+  onAddToCart(currentConfig, price);
+  
+  // Provide quick feedback to user
+  alert("Product added to cart!");
+  
+  // Reset dirty state since changes were saved
+  setIsDirty(false);
+  }
+  }, [validation, price, currentConfig, onAddToCart]);
+  
+  // Keyboard shortcut: Ctrl+Enter (Windows) or Cmd+Enter (Mac)
+  useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+   handleQuickAdd();
+  }
+  };
+  
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleQuickAdd]); */
 
   const handleCopyShareUrl = useCallback(() => {
     navigator.clipboard
       .writeText(shareUrl)
       .then(() => {
+        alert("Link copied to clipboard!");
       })
       .catch(() => {
-        setError(ERROR_CODES.UNKNOWN);
+        setError("Failed to copy link.");
       });
   }, [shareUrl]);
 
@@ -445,14 +481,14 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
 
   const handleDiscardChanges = useCallback(() => {
     if (window.confirm("Are you sure you want to discard your changes?")) {
-    setSelections(getDefaultSelections(product));
-    setSelectedAddOns([]);
-    setQuantity(1);
-    setIsDirty(false);
-    if (window.history.replaceState) {
-      window.history.replaceState({}, '', window.location.pathname);
+      setSelections(getDefaultSelections(product));
+      setSelectedAddOns([]);
+      setQuantity(1);
+      setIsDirty(false);
+      if (window.history.replaceState) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     }
-  }
   }, [product]);
 
   // -------------------------------------------------------------------------
@@ -460,7 +496,8 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
   // -------------------------------------------------------------------------
 
   const renderSelectOption = (option: ProductOption) => {
-    const currentValue = selections[option.id] as string;
+    const rawValue = selections[option.id];
+    const currentValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : "";
 
     return (
       <div className="option-group" key={option.id}>
@@ -475,12 +512,9 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           onChange={(e) => handleOptionChange(option.id, e.target.value)}
           disabled={readOnly}
         >
+          <option value="">-- Select {option.name} --</option>
           {option.choices?.map((choice) => (
-            <option
-              key={choice.id}
-              value={choice.value}
-              disabled={!choice.available}
-            >
+            <option key={choice.id} value={String(choice.value)} disabled={!choice.available}>
               {choice.label}
               {choice.priceModifier !== 0 &&
                 ` (${choice.priceModifier > 0 ? "+" : ""}${formatPrice(choice.priceModifier, product.currency)})`}
@@ -509,13 +543,13 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           {option.choices?.map((choice, index) => (
             <div
               key={index}
-              id={`color-swatch-${index}`} 
+              id={`color-swatch-${index}`}
               className={`color-swatch ${currentValue === choice.value ? "selected" : ""}`}
               style={{ backgroundColor: choice.colorHex }}
               onClick={() =>
                 !readOnly && handleOptionChange(option.id, choice.value)
               }
-              tabIndex={currentValue === choice.value ? 0 : -1} 
+              tabIndex={currentValue === choice.value ? 0 : -1}
               role="radio"
               aria-checked={currentValue === choice.value}
               title={choice.label}
@@ -534,7 +568,7 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
                 if (nextIndex !== -1) {
                   const nextChoice = option.choices![nextIndex];
                   handleOptionChange(option.id, nextChoice.value);
-                setTimeout(() => {
+                  setTimeout(() => {
                     const el = document.getElementById(`color-swatch-${nextIndex}`);
                     el?.focus();
                   }, 0);
@@ -875,6 +909,15 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
   // Main Render
   // -------------------------------------------------------------------------
 
+  const allRequiredSelected = product.options
+    .filter((opt) => opt.required)
+    .every((opt) => {
+      const val = selections[opt.id];
+      return val !== undefined && val !== null && val !== "";
+    });
+
+  const displayPrice = allRequiredSelected ? formattedTotal : formatPrice(0, product.currency);
+
   return (
     <div className="configurator" ref={containerRef}>
       <div className="configurator-header">
@@ -885,9 +928,8 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
         <div className="configurator-actions">
           <button
             className="btn btn-secondary"
-            onClick={() => {
-              lastFocusedElement.current =
-                document.activeElement as HTMLElement;
+            onClick={(e) => {
+              lastFocusedElement.current = e.currentTarget;
               setShowDraftModal(true);
             }}
           >
@@ -895,9 +937,8 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
           </button>
           <button
             className="btn btn-secondary"
-            onClick={() => {
-              lastFocusedElement.current =
-                document.activeElement as HTMLElement;
+            onClick={(e) => {
+              lastFocusedElement.current = e.currentTarget;
               setShowShareModal(true);
             }}
           >
@@ -913,12 +954,11 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
 
       {(error || priceError) && (
         <div className="error-message">
-          <div>Something went wrong. Please try again.</div>
-          <div className="error-code">Error: {error || priceError}</div>
+          <div>{error || "Something went wrong. Please try again."}</div>
         </div>
       )}
 
-      {validation?.warnings.map((warning, i) => (
+      {validation?.warnings?.map((warning, i) => (
         <div key={i} className="validation-warning">
           {warning.message}
         </div>
@@ -960,32 +1000,17 @@ export const ProductConfigurator: React.FC<ProductConfiguratorProps> = ({
             </div>
 
             {renderPriceBreakdown()}
-
-            <div className="quick-add-section">
-              <button
-                className="quick-add-btn"
-                onClick={handleQuickAdd}
-                disabled={readOnly || !validation?.valid}
-              >
-                ⚡ Quick Add to Cart
-              </button>
-            </div>
           </div>
+
 
           <button
             className="btn btn-success btn-block"
             onClick={handleAddToCart}
-            disabled={readOnly || !validation?.valid || isPriceLoading}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === '') {
-                e.preventDefault();
-                handleAddToCart();
-              }
-            }}
-            tabIndex={0}
+            disabled={readOnly || isPriceLoading || !allRequiredSelected}
           >
             {isPriceLoading ? "Calculating..." : "Add to Cart"}
           </button>
+
 
           <div className="config-summary">
             <div className="config-summary-title">Your Configuration</div>
